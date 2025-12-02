@@ -91,7 +91,35 @@ bool Cache::remove(Person person){
 // Returns copy of Person with given <key,ID> pair if Person found live at mapped bucket index
 // i.e. does not return copy if bucket is empty-since-start (nullptr) or empty-since-delete (m_used==false)
 const Person Cache::getPerson(string key, int ID) const{
-    
+    int index;
+    // search indices mapped by probing methods for Person with matching key + ID pair
+    //
+    for (int i = 0; i < m_currentCap; i++) {
+        // determine bucket index
+        index = probingHelper(m_hash(key), i);
+        // mapped bucket is empty-since-start
+        // Person does not exist in table
+        // returns empty person object
+        if (m_currentTable[index] == nullptr) {
+            return Person();
+        }
+        // mapped bucket is empty-since-delete
+        else if (!(m_currentTable[index]->getUsed())) {
+            // sought Person is in table but has been deleted
+            if ((m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
+                return Person();
+            }
+        }
+        // mapped bucket contains live Person matching parameters
+        else if ((m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
+            // make copy of Person pointed to by table element
+            Person temp = *m_currentTable[index];
+            // return copy of found Person
+            return temp;
+        }
+    }
+    // entire table searched but no matching Person found live
+    return Person();
 }
 // Looks for person in table; if found, updates its ID and returns true
 // If not found, returns false
@@ -112,13 +140,14 @@ bool Cache::updateID(Person person, int ID){
             index = probingHelper(m_hash(person.getKey()), i);
             // check if matching Person object is found yet
             if ((m_currentTable[index]->getID() == person.getID()) && (m_currentTable[index]->getKey().compare(person.getKey()) == 0)) {
-                break;
+                // Update ID member of person in table
+                m_currentTable[index]->setID(ID);
+
+                return true;
             }
         }
-        // Overwrite unaltered person with updated person
-        m_currentTable[index]->setID(ID);
     }
-    return true;
+    return false;
 }
 // Returns load factor of current hash table
 // Load factor: ratio of occupied buckets (live + deleted nodes) to table capacity
