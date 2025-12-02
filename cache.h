@@ -116,5 +116,9 @@ class Cache{
     * Private function declarations go here! *
     ******************************************/
 
+    int probingHelper(int hash, int i) const;
+    int linearProbe(int hash, int i) const;
+    int quadProbe(int hash, int i) const;
+    int doubleHashProbe(int hash,int i) const;
 };
 #endif
