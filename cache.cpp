@@ -1,35 +1,49 @@
 // CMSC 341 - Fall 25 - Project 4
 #include "cache.h"
 Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
-    // assign given size into local variable
-    int tableSize = size;
+    // assign given size into capacity member variable
+    int m_currentCap = size;
 
     // if given size is non-prime
-    if (!isPrime(tableSize)) {
+    if (!isPrime(m_currentCap)) {
         // finds next prime after given non-prime size
         // returns value between MINPRIME and MAXPRIME
-        tableSize = findNextPrime(tableSize);
+        m_currentCap = findNextPrime(m_currentCap);
     }
     // if given size is prime
     else {
-        if (tableSize < MINPRIME) tableSize = MINPRIME;
-        else if (tableSize > MAXPRIME) tableSize = MAXPRIME;
+        if (m_currentCap < MINPRIME) m_currentCap = MINPRIME;
+        else if (m_currentCap > MAXPRIME) m_currentCap = MAXPRIME;
     }
 
     // allocates memory for new hash table with initial size of a prime number
-    m_currentTable = new Person*[tableSize];
+    m_currentTable = new Person*[m_currentCap];
     // initialize each element of table with default Person object
-    for (int i=0; i < tableSize; i++) {
+    for (int i=0; i < m_currentCap; i++) {
         m_currentTable[i] = new Person();
     }
+
     // assigns initial hash function for table
     m_hash = hash;
     // assigns initial collision handling policy for table
     m_currProbing = probing;
+
+    m_currentSize = 0;
+    m_currNumDeleted = 0;
+
+    m_oldCap = 0;
+    m_oldSize = 0;
+    m_oldNumDeleted = 0;
+
+    m_transferIndex = 0;
 }
 
 Cache::~Cache(){
-    
+    for (int i=0; i < m_currentCap; i++) {
+        delete m_currentTable[i];
+    }
+
+    delete m_currentTable;
 }
 
 void Cache::changeProbPolicy(prob_t policy){
