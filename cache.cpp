@@ -65,9 +65,11 @@ const Person Cache::getPerson(string key, int ID) const{
 bool Cache::updateID(Person person, int ID){
     
 }
-
+// Returns load factor of current hash table
+// Load factor: ratio of occupied buckets (live + deleted nodes) to table capacity
 float Cache::lambda() const {
-      
+    float lf = (static_cast<float>(m_currentSize))/m_currentCap;
+    return lf;
 }
 
 float Cache::deletedRatio() const {
