@@ -39,15 +39,18 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
 }
 
 Cache::~Cache(){
+    // deallocate memory of each table element
     for (int i=0; i < m_currentCap; i++) {
         delete m_currentTable[i];
     }
-
+    // deallocate memory of table itself
     delete m_currentTable;
 }
-
+// Sets new collision handling policy for table into m_newPolicy member
+// This policy is not implemented until the next rehash/transfer operation commences
 void Cache::changeProbPolicy(prob_t policy){
-    
+    // store newly-requested collision handling policy
+    m_newPolicy = policy;
 }
 
 bool Cache::insert(Person person){
@@ -71,7 +74,7 @@ float Cache::lambda() const {
     float lf = (static_cast<float>(m_currentSize))/m_currentCap;
     return lf;
 }
-
+// Returns ratio of deleted buckets to occupied (live + deleted) buckets
 float Cache::deletedRatio() const {
     float dr = (static_cast<float>(m_currNumDeleted))/m_currentSize;
     return dr;
