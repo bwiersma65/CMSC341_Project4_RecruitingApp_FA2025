@@ -73,7 +73,8 @@ float Cache::lambda() const {
 }
 
 float Cache::deletedRatio() const {
-    
+    float dr = (static_cast<float>(m_currNumDeleted))/m_currentSize;
+    return dr;
 }
 
 void Cache::dump() const {
