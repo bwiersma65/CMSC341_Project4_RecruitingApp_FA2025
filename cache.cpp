@@ -41,12 +41,24 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
 }
 
 Cache::~Cache(){
-    // deallocate memory of each table element
-    for (int i=0; i < m_currentCap; i++) {
-        delete m_currentTable[i];
+    // check if current table is allocated
+    if (m_currentTable != nullptr) {
+        // deallocate memory of each table element
+        for (int i=0; i < m_currentCap; i++) {
+            delete m_currentTable[i];
+        }
+        // deallocate memory of table itself
+        delete [] m_currentTable;
     }
-    // deallocate memory of table itself
-    delete m_currentTable;
+    // check if old table member is allocated
+    if (m_oldTable != nullptr) {
+        // dealloc memory of each element
+        for (int i=0; i < m_oldCap; i++) {
+            delete m_oldTable[i];
+        }
+        // dealloc memory of table itself
+        delete [] m_oldTable;
+    }
 }
 // Sets new collision handling policy for table into m_newPolicy member
 // This policy is not implemented until the next rehash/transfer operation commences
