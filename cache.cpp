@@ -95,7 +95,7 @@ const Person Cache::getPerson(string key, int ID) const{
 // If not found, returns false
 bool Cache::updateID(Person person, int ID){
     // temp holder for result of getPerson()
-    // either holds the person from table, or holds an empty person object
+    // either holds copy of person from table, or holds an empty person object
     Person temp = getPerson(person.getKey(), person.getID());
     // empty person object; not found in table
     if (temp.getID() == 0) {
@@ -109,6 +109,7 @@ bool Cache::updateID(Person person, int ID){
         // Overwrite unaltered person with updated person
         m_currentTable[index]->operator=(temp);
     }
+    return true;
 }
 // Returns load factor of current hash table
 // Load factor: ratio of occupied buckets (live + deleted nodes) to table capacity
@@ -161,4 +162,40 @@ int Cache::findNextPrime(int current){
     }
     //if a user tries to go over MAXPRIME
     return MAXPRIME;
+}
+
+/******************************************
+ * Private function definitions go here! *
+******************************************/
+// calls individual probing helper based on current collision-handling policy
+// returns bucket index mapped to for Person with given hashcode and attempt iteration "i"
+int Cache::probingHelper(int hash, int i) const {
+    switch (m_currProbing) {
+        case LINEAR:
+            return linearProbe(hash, i);
+            break;
+        case QUADRATIC:
+            return quadProbe(hash, i);
+            break;
+        case DOUBLEHASH:
+            return doubleHashProbe(hash, i);
+            break;
+    }
+    // error case: should not trigger
+    return -1;
+}
+// returns bucket index directly mapped to by hash function
+// if index occupied, will increment by 1 for each iteration
+int Cache::linearProbe(int hash, int i) const {
+    return (hash + i) % m_currentCap;
+}
+// returns bucket index
+// if index occupied, increments by iteration and square of iteration
+int Cache::quadProbe(int hash, int i) const {
+    return (hash + i + (i*i)) % m_currentCap;
+}
+// returns bucket index
+// if index occupied, performs a double-hash to determine index
+int Cache::doubleHashProbe(int hash, int i) const {
+    return ((hash % m_currentCap) + (i * (11 - (hash % 11)))) % m_currentCap;
 }
