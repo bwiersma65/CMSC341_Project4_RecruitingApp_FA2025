@@ -73,11 +73,12 @@ bool Cache::insert(Person person){
         return false;
     }
     // check if Person already exists in table
-    else if (getPerson(person.getKey(), person.getID()).getID() == 0) {
+    else if (getPerson(person.getKey(), person.getID()).getID() != 0) {
         return false;
     }
-    else {
-
+    // table is full and cannot be resized
+    else if (m_currentSize == MAXPRIME) {
+        return false;
     }
     // Run Person's key through hash function and modulo by table capacity to determine
     // initial insertion index
@@ -87,7 +88,8 @@ bool Cache::insert(Person person){
 bool Cache::remove(Person person){
     
 }
-
+// Returns copy of Person with given <key,ID> pair if Person found live at mapped bucket index
+// i.e. does not return copy if bucket is empty-since-start (nullptr) or empty-since-delete (m_used==false)
 const Person Cache::getPerson(string key, int ID) const{
     
 }
@@ -96,18 +98,25 @@ const Person Cache::getPerson(string key, int ID) const{
 bool Cache::updateID(Person person, int ID){
     // temp holder for result of getPerson()
     // either holds copy of person from table, or holds an empty person object
-    Person temp = getPerson(person.getKey(), person.getID());
-    // empty person object; not found in table
-    if (temp.getID() == 0) {
+    Person personTemp = getPerson(person.getKey(), person.getID());
+    // empty person object; means not found in table
+    if ((personTemp.getID() == 0)) {
         return false;
     }
+    // found as live data in table
     else {
-        // Update person'd ID to parameter value
-        temp.setID(ID);
-        // Hash person object to find unaltered object's location in table
-        int index = m_hash(person.getKey()) % m_currentCap;
+        // Hash person object to find un-updated object's location in table
+        int index;
+        for (int i=0; i < m_currentCap; i++) {
+            // determine bucket index
+            index = probingHelper(m_hash(person.getKey()), i);
+            // check if matching Person object is found yet
+            if ((m_currentTable[index]->getID() == person.getID()) && (m_currentTable[index]->getKey().compare(person.getKey()) == 0)) {
+                break;
+            }
+        }
         // Overwrite unaltered person with updated person
-        m_currentTable[index]->operator=(temp);
+        m_currentTable[index]->setID(ID);
     }
     return true;
 }
@@ -192,7 +201,7 @@ int Cache::linearProbe(int hash, int i) const {
 // returns bucket index
 // if index occupied, increments by iteration and square of iteration
 int Cache::quadProbe(int hash, int i) const {
-    return (hash + i + (i*i)) % m_currentCap;
+    return ((hash % m_currentCap) + (i*i)) % m_currentCap;
 }
 // returns bucket index
 // if index occupied, performs a double-hash to determine index
