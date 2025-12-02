@@ -2,7 +2,7 @@
 #include "cache.h"
 Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
     // assign given size into capacity member variable
-    int m_currentCap = size;
+    m_currentCap = size;
 
     // if given size is non-prime
     if (!isPrime(m_currentCap)) {
@@ -20,17 +20,19 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
     m_currentTable = new Person*[m_currentCap];
     // initialize each element of table with default Person object
     for (int i=0; i < m_currentCap; i++) {
-        m_currentTable[i] = new Person();
+        m_currentTable[i] = nullptr;
     }
 
     // assigns initial hash function for table
     m_hash = hash;
     // assigns initial collision handling policy for table
     m_currProbing = probing;
+    m_newPolicy = probing;
 
     m_currentSize = 0;
     m_currNumDeleted = 0;
 
+    m_oldTable = nullptr;
     m_oldCap = 0;
     m_oldSize = 0;
     m_oldNumDeleted = 0;
@@ -54,7 +56,20 @@ void Cache::changeProbPolicy(prob_t policy){
 }
 
 bool Cache::insert(Person person){
-    
+    // check that Person ID is within valid range
+    if ((person.getID() < MINID) || (MAXID < person.getID())) {
+        return false;
+    }
+    // check if Person already exists in table
+    else if (getPerson(person.getKey(), person.getID()).getID() == 0) {
+        return false;
+    }
+    else {
+
+    }
+    // Run Person's key through hash function and modulo by table capacity to determine
+    // initial insertion index
+    int insertIndex = m_hash(person.getKey()) % m_currentCap;
 }
 
 bool Cache::remove(Person person){
@@ -64,9 +79,24 @@ bool Cache::remove(Person person){
 const Person Cache::getPerson(string key, int ID) const{
     
 }
-
+// Looks for person in table; if found, updates its ID and returns true
+// If not found, returns false
 bool Cache::updateID(Person person, int ID){
-    
+    // temp holder for result of getPerson()
+    // either holds the person from table, or holds an empty person object
+    Person temp = getPerson(person.getKey(), person.getID());
+    // empty person object; not found in table
+    if (temp.getID() == 0) {
+        return false;
+    }
+    else {
+        // Update person'd ID to parameter value
+        temp.setID(ID);
+        // Hash person object to find unaltered object's location in table
+        int index = m_hash(person.getKey()) % m_currentCap;
+        // Overwrite unaltered person with updated person
+        m_currentTable[index]->operator=(temp);
+    }
 }
 // Returns load factor of current hash table
 // Load factor: ratio of occupied buckets (live + deleted nodes) to table capacity
