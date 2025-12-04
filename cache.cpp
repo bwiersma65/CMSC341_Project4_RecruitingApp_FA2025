@@ -136,7 +136,7 @@ bool Cache::insert(Person person){
         rehash();
     }
     // no rehashes are currently in progress
-    // if insert was success, check if rehash is needed
+    // if insert was success, check if rehash initiation is needed
     else if (success) {
         // load factor is ratio of total number of occupied buckets to table size
         float loadFactor = lambda();
@@ -168,59 +168,62 @@ bool Cache::remove(Person person){
     }
 
     /*
-    Begin search for person to be removed in current table
+    Search current table
     */
-    int firstHash = m_hash(key) % m_currentCap;
-    // Check if initial bucket element is non-null and is live data
-    if ((m_currentTable[firstHash] != nullptr) && (m_currentTable[firstHash]->getUsed() == true)) {
-        // Check if intitial element matches parameter data
-        if ((m_currentTable[firstHash]->getID() == ID) && (m_currentTable[firstHash]->getKey() == key)) {
-            // delete element by setting m_used to false
-            m_currentTable[firstHash]->setUsed(false);
-            // removal was successful
-            success = true;
-            m_currNumDeleted++;
+    int index;
+    for (int i=0; i < m_currentCap; i++) {
+        index = probingHelper(m_currentTable, key, i);
+        // Check if initial bucket element is non-null and is live data
+        if ((m_currentTable[index] != nullptr) && (m_currentTable[index]->getUsed() == true)) {
+            // Check if intitial element matches parameter data
+            if ((m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey() == key)) {
+                // delete element by setting m_used to false
+                m_currentTable[index]->setUsed(false);
+                // removal was successful
+                success = true;
+                m_currNumDeleted++;
+                break;
+            }
         }
     }
-    // Either initial bucket is empty/already-deleted or something live exists but it's NOT our person to be removed
-    // Collision occured
     /*
-    Probing sequence of current table begins
+    Search old table
     */
-    int insertIndex;
-    if (!success) {
-        for (int i=1; i < m_currentCap; i++) {
-            insertIndex = probingHelper(m_currentTable, key, i);
-            // bucket is not empty-since-start
-            if (m_currentTable[insertIndex] != nullptr) {
-                // Create new person with parameter and assign to hashed bucket
-                m_currentTable[insertIndex] = new Person(key, ID, true);
-                
-                success = true;
-                m_currentSize++;
-                break;
-            }
-            // bucket is empty-since-delete
-            else if (m_currentTable[insertIndex]->getUsed()==false) {
-                // copy data from parameter into existing deleted node
-                *(m_currentTable[insertIndex]) = person;
-                // Make sure m_used is set to true
-                m_currentTable[firstHash]->setUsed(true);
-                // insertion successful
-                success = true;
-                m_currentSize++;
-                break;
+    // if search failed and the old table exists
+    if ((m_oldTable != nullptr) && !success) {
+        for (int i=0; i < m_oldCap; i++) {
+            index = probingHelper(m_oldTable, key, i);
+            // Check if initial bucket element is non-null and is live data
+            if ((m_oldTable[index] != nullptr) && (m_oldTable[index]->getUsed() == true)) {
+                // Check if intitial element matches parameter data
+                if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey() == key)) {
+                    // delete element by setting m_used to false
+                    m_oldTable[index]->setUsed(false);
+                    // removal was successful
+                    success = true;
+                    m_oldNumDeleted++;
+                    break;
+                }
             }
         }
     }
-    // If removal is successful, check delete ratio and maybe rehash
 
-    // The deleted ratio is the number of deleted buckets divided by the number of occupied buckets
-    float deleteRatio = deletedRatio();
-    // If delete ratio exceeds 80%, initiate rehash
-    if (deleteRatio > 0.8) {
+    // check if rehash has already been initiated previously
+    if (m_transferIndex != 0) {
         rehash();
     }
+    // no rehashes are currently in progress
+    // if removal was success, check if rehash initiation is needed
+    else if (success) {
+        // The deleted ratio is the number of deleted buckets divided by the number of occupied buckets
+        float deleteRatio = deletedRatio();
+        // If delete ratio exceeds 80%, initiate rehash
+        if (deleteRatio > 0.8) {
+            rehash();
+        }
+    }
+    
+    return success;
 }
 // Returns copy of Person with given <key,ID> pair if Person found live at mapped bucket index
 // i.e. does not return copy if bucket is empty-since-start (nullptr) or empty-since-delete (m_used==false)
@@ -266,39 +269,44 @@ const Person Cache::getPerson(string key, int ID) const{
             return temp;
         }
     }
+    // if old table exists
+    if (m_oldTable != nullptr) {
+        /*
+        Search old table
+        */
+        for (int i = 0; i < m_oldCap; i++) {
+            // determine bucket index using current probing method
+            index = probingHelper(m_oldTable, key, i);
 
-    /*
-    Search old table
-    */
-    for (int i = 0; i < m_oldCap; i++) {
-        // determine bucket index using current probing method
-        index = probingHelper(m_oldTable, key, i);
+            // mapped bucket is empty-since-start
+            // Person does not exist in table
+            // returns empty person object
+            if (m_oldTable[index] == nullptr) {
+                //return Person();
+                break;
+            }
 
-        // mapped bucket is empty-since-start
-        // Person does not exist in table
-        // returns empty person object
-        if (m_oldTable[index] == nullptr) {
-            return Person();
-        }
+            // mapped bucket is empty-since-delete
+            else if (!(m_oldTable[index]->getUsed())) {
+                // sought Person is in table but has been deleted
+                if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
+                    //return Person();
+                    break;
+                }
+            }
 
-        // mapped bucket is empty-since-delete
-        else if (!(m_oldTable[index]->getUsed())) {
-            // sought Person is in table but has been deleted
-            if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
-                return Person();
+            // mapped bucket contains live Person matching parameters
+            else if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
+                // make copy of Person pointed to by table element
+                temp = *m_oldTable[index];
+                // return copy of found Person
+                return temp;
             }
         }
+    }    
 
-        // mapped bucket contains live Person matching parameters
-        else if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
-            // make copy of Person pointed to by table element
-            Person temp = *m_oldTable[index];
-            // return copy of found Person
-            return temp;
-        }
-    }
-
-    // both tables searched but no matching Person found live
+    // current table and/or old table searched and no person found;
+    // return empty Person, to indicate nothing was found
     return Person();
 }
 // Looks for person in table (current and old); if found, updates its ID and returns true
