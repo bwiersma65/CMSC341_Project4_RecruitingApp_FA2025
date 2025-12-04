@@ -27,7 +27,7 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
     m_hash = hash;
     // assigns initial collision handling policy for table
     m_currProbing = probing;
-    m_newPolicy = probing;
+    m_newPolicy = m_currProbing;
 
     m_currentSize = 0;
     m_currNumDeleted = 0;
@@ -108,7 +108,7 @@ bool Cache::insert(Person person){
       suitable bucket was found to insert into
     */
     for (int i=0; i < m_currentCap; i++) {
-        insertIndex = probingHelper(key, i);
+        insertIndex = probingHelper(m_currentTable, key, i);
         // bucket is empty-since-start; good for insert
         if (m_currentTable[insertIndex] == nullptr) {
             // Create new person with parameter and assign to hashed bucket
@@ -190,7 +190,7 @@ bool Cache::remove(Person person){
     int insertIndex;
     if (!success) {
         for (int i=1; i < m_currentCap; i++) {
-            insertIndex = probingHelper(key, i);
+            insertIndex = probingHelper(m_currentTable, key, i);
             // bucket is not empty-since-start
             if (m_currentTable[insertIndex] != nullptr) {
                 // Create new person with parameter and assign to hashed bucket
@@ -226,7 +226,8 @@ bool Cache::remove(Person person){
 // i.e. does not return copy if bucket is empty-since-start (nullptr) or empty-since-delete (m_used==false)
 const Person Cache::getPerson(string key, int ID) const{
     int index;
-    bool found = false;
+    //bool found = false;
+    Person temp = Person();
     // search indices mapped by probing method for Person with matching key + ID pair
     // if bucket is occupied by live data, handle the collision and keep searching
     // if deleted bucket matching data, or empty-since-start bucket is encountered, 
@@ -237,14 +238,14 @@ const Person Cache::getPerson(string key, int ID) const{
     */
     for (int i = 0; i < m_currentCap; i++) {
         // determine bucket index using current probing method
-        index = probingHelper(key, i);
+        index = probingHelper(m_currentTable, key, i);
 
         // mapped bucket is empty-since-start
         // Person does not exist in this table
         // Look in old table if it exists
         if (m_currentTable[index] == nullptr) {
             //return Person();
-            found = false;
+            //found = false;
             break;
         }
 
@@ -252,7 +253,7 @@ const Person Cache::getPerson(string key, int ID) const{
         else if (!(m_currentTable[index]->getUsed())) {
             // sought Person is in table but has been deleted
             if ((m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
-                found = false;
+                //found = false;
                 break;
             }
         }
@@ -260,7 +261,7 @@ const Person Cache::getPerson(string key, int ID) const{
         // mapped bucket contains live Person matching parameters
         else if ((m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
             // make copy of Person pointed to by table element
-            Person temp = *m_currentTable[index];
+            temp = *m_currentTable[index];
             // return copy of found Person
             return temp;
         }
@@ -271,7 +272,7 @@ const Person Cache::getPerson(string key, int ID) const{
     */
     for (int i = 0; i < m_oldCap; i++) {
         // determine bucket index using current probing method
-        index = probingHelper(key, i);
+        index = probingHelper(m_oldTable, key, i);
 
         // mapped bucket is empty-since-start
         // Person does not exist in table
@@ -307,6 +308,9 @@ bool Cache::updateID(Person person, int ID){
     // either holds copy of person from table, or holds an empty person object
     Person personTemp = getPerson(person.getKey(), person.getID());
 
+    /*
+    Search current table
+    */
     // empty person object; means not found in table
     if ((personTemp.getID() == 0)) {
         return false;
@@ -318,7 +322,7 @@ bool Cache::updateID(Person person, int ID){
         int index;
         for (int i=0; i < m_currentCap; i++) {
             // determine bucket index
-            index = probingHelper(person.getKey(), i);
+            index = probingHelper(m_currentTable, person.getKey(), i);
             // check if matching Person object is found yet
             if ((m_currentTable[index]->getID() == person.getID()) && (m_currentTable[index]->getKey().compare(person.getKey()) == 0)) {
                 // Update ID member of person in table
@@ -328,6 +332,10 @@ bool Cache::updateID(Person person, int ID){
             }
         }
     }
+
+    /*
+    Search old table
+    */
     return false;
 }
 // Returns load factor of current hash table
@@ -388,17 +396,30 @@ int Cache::findNextPrime(int current){
 ******************************************/
 // calls individual probing helper based on current collision-handling policy
 // returns bucket index mapped to for Person with given hashcode and attempt iteration "i"
-int Cache::probingHelper(string key, int i) const {
+int Cache::probingHelper(Person** table, string key, int i) const {
+    // result of hashing key
     int hash = m_hash(key);
-    switch (m_currProbing) {
+    // Checks which table's probing policy to use
+    prob_t probPolicy;
+    int capacity;
+    if (table == m_currentTable) {
+        probPolicy = m_currProbing;
+        capacity = m_currentCap;
+    }
+    else if (table == m_oldTable) {
+        probPolicy = m_oldProbing;
+        capacity = m_oldCap;
+    }
+
+    switch (probPolicy) {
         case LINEAR:
-            return linearProbe(hash, i);
+            return linearProbe(hash, i, capacity);
             break;
         case QUADRATIC:
-            return quadProbe(hash, i);
+            return quadProbe(hash, i, capacity);
             break;
         case DOUBLEHASH:
-            return doubleHashProbe(hash, i);
+            return doubleHashProbe(hash, i, capacity);
             break;
     }
     // error case: should not trigger
@@ -406,32 +427,32 @@ int Cache::probingHelper(string key, int i) const {
 }
 // returns bucket index directly mapped to by hash function
 // if index occupied, will increment by 1 for each iteration
-int Cache::linearProbe(int hash, int i) const {
+int Cache::linearProbe(int hash, int i, int capacity) const {
     if (i==0) {
-        return hash % m_currentCap;
+        return hash % capacity;
     }
     else {
-        return (hash + i) % m_currentCap;
+        return (hash + i) % capacity;
     }
 }
 // returns bucket index
 // if index occupied, increments by iteration and square of iteration
-int Cache::quadProbe(int hash, int i) const {
+int Cache::quadProbe(int hash, int i, int capacity) const {
     if (i==0) {
-        return hash % m_currentCap;
+        return hash % capacity;
     }
     else {
-        return (hash + i + (i*i)) % m_currentCap;
+        return (hash + i + (i*i)) % capacity;
     }
 }
 // returns bucket index
 // if index occupied, performs a double-hash to determine index
-int Cache::doubleHashProbe(int hash, int i) const {
+int Cache::doubleHashProbe(int hash, int i, int capacity) const {
     if (i==0) {
-        return hash % m_currentCap;
+        return hash % capacity;
     }
     else {
-        return ((hash % m_currentCap) + (i * (11 - (hash % 11)))) % m_currentCap;
+        return ((hash % capacity) + (i * (11 - (hash % 11)))) % capacity;
     }
 }
 // 
