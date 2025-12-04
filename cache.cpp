@@ -4,8 +4,8 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
     // assign given size into capacity member variable
     m_currentCap = size;
 
-    // if given size is non-prime
-    if (!isPrime(m_currentCap)) {
+    // if given size is non-prime or less than minimum size
+    if ((!isPrime(m_currentCap)) || (m_currentCap < MINPRIME)) {
         // finds next prime after given non-prime size
         // returns value between MINPRIME and MAXPRIME
         m_currentCap = findNextPrime(m_currentCap);
@@ -18,7 +18,7 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
 
     // allocates memory for new hash table with initial size of a prime number
     m_currentTable = new Person*[m_currentCap];
-    // initialize each element of table with default Person object
+    // initialize each element of table with nullptr
     for (int i=0; i < m_currentCap; i++) {
         m_currentTable[i] = nullptr;
     }
@@ -36,6 +36,7 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
     m_oldCap = 0;
     m_oldSize = 0;
     m_oldNumDeleted = 0;
+    m_oldProbing = DEFPOLCY;
 
     m_transferIndex = 0;
 }
@@ -68,48 +69,194 @@ void Cache::changeProbPolicy(prob_t policy){
 }
 
 bool Cache::insert(Person person){
+    bool success = false;
+    // If this insertion would initiate a rehash to increase table capacity but capacity is already MAXPRIME,
+    // do not commence with insert
+    if ((m_currentCap==MAXPRIME) && ((static_cast<float>(m_currentSize+1)/m_currentCap)>0.5)) {
+        return false;
+    }
+
+    // local holders for identifying data //
+    string key = person.getKey();
+    int ID = person.getID();
+    ////////////////////////////////////////
+
+    /*
+    Validate parameters
+    */
     // check that Person ID is within valid range
-    if ((person.getID() < MINID) || (MAXID < person.getID())) {
+    if ((ID < MINID) || (MAXID < ID)) {
         return false;
     }
     // check if Person already exists in table
-    else if (getPerson(person.getKey(), person.getID()).getID() != 0) {
+    else if (getPerson(key, ID).getID() != 0) {
         return false;
     }
     // table is full and cannot be resized
     else if (m_currentSize == MAXPRIME) {
         return false;
     }
-    // Run Person's key through hash function and modulo by table capacity to determine
-    // initial insertion index
-    int insertIndex = m_hash(person.getKey()) % m_currentCap;
+
+    // index to insert new person
+    int insertIndex;
+    /*
+    Probing sequence
+    - on first iteration (i=0) probing helper returns first hash index (m_hash(key) % m_currentCap)
+    - if that bucket index is empty-since-start (null) or empty-since-delete (m_used=false), insert commences
+    - if not, attempt iterates (i++) and try again with probing scheme provided by probingHelper
+    - if for-loop ends and success=false, table from first hash index to m_currentCap was searched and no
+      suitable bucket was found to insert into
+    */
+    for (int i=0; i < m_currentCap; i++) {
+        insertIndex = probingHelper(key, i);
+        // bucket is empty-since-start; good for insert
+        if (m_currentTable[insertIndex] == nullptr) {
+            // Create new person with parameter and assign to hashed bucket
+            m_currentTable[insertIndex] = new Person(key, ID, true);
+            
+            success = true;
+            m_currentSize++;
+            break;
+        }
+        // bucket is empty-since-delete
+        else if (m_currentTable[insertIndex]->getUsed() == false) {
+            // copy data from parameter into existing deleted node
+            *(m_currentTable[insertIndex]) = person;
+            // Make sure m_used is set to true
+            m_currentTable[insertIndex]->setUsed(true);
+            // insertion successful
+            success = true;
+            m_currentSize++;
+            break;
+        }
+    }
+    
+    // check if rehash has already been initiated previously
+    if (m_transferIndex != 0) {
+        rehash();
+    }
+    // no rehashes are currently in progress
+    // if insert was success, check if rehash is needed
+    else if (success) {
+        // load factor is ratio of total number of occupied buckets to table size
+        float loadFactor = lambda();
+        // If load factor exceeds 50%, initiate rehash
+        if (loadFactor > 0.5) {
+            rehash();
+        }
+    }
+
+    // Returns true if parameter was inserted to hash table successfully
+    // Returns false if not
+    return success;
 }
 
 bool Cache::remove(Person person){
-    
+    bool success = false;
+
+    // local holders for identifying data for parameter //
+    string key = person.getKey();
+    int ID = person.getID();
+    //////////////////////////////////////////////////////
+
+    /*
+    Validate parameters
+    */
+    // check if Person does not exist in table (current, or old if it exists)
+    if (getPerson(key, ID).getID() == 0) {
+        return false;
+    }
+
+    /*
+    Begin search for person to be removed in current table
+    */
+    int firstHash = m_hash(key) % m_currentCap;
+    // Check if initial bucket element is non-null and is live data
+    if ((m_currentTable[firstHash] != nullptr) && (m_currentTable[firstHash]->getUsed() == true)) {
+        // Check if intitial element matches parameter data
+        if ((m_currentTable[firstHash]->getID() == ID) && (m_currentTable[firstHash]->getKey() == key)) {
+            // delete element by setting m_used to false
+            m_currentTable[firstHash]->setUsed(false);
+            // removal was successful
+            success = true;
+            m_currNumDeleted++;
+        }
+    }
+    // Either initial bucket is empty/already-deleted or something live exists but it's NOT our person to be removed
+    // Collision occured
+    /*
+    Probing sequence of current table begins
+    */
+    int insertIndex;
+    if (!success) {
+        for (int i=1; i < m_currentCap; i++) {
+            insertIndex = probingHelper(key, i);
+            // bucket is not empty-since-start
+            if (m_currentTable[insertIndex] != nullptr) {
+                // Create new person with parameter and assign to hashed bucket
+                m_currentTable[insertIndex] = new Person(key, ID, true);
+                
+                success = true;
+                m_currentSize++;
+                break;
+            }
+            // bucket is empty-since-delete
+            else if (m_currentTable[insertIndex]->getUsed()==false) {
+                // copy data from parameter into existing deleted node
+                *(m_currentTable[insertIndex]) = person;
+                // Make sure m_used is set to true
+                m_currentTable[firstHash]->setUsed(true);
+                // insertion successful
+                success = true;
+                m_currentSize++;
+                break;
+            }
+        }
+    }
+    // If removal is successful, check delete ratio and maybe rehash
+
+    // The deleted ratio is the number of deleted buckets divided by the number of occupied buckets
+    float deleteRatio = deletedRatio();
+    // If delete ratio exceeds 80%, initiate rehash
+    if (deleteRatio > 0.8) {
+        rehash();
+    }
 }
 // Returns copy of Person with given <key,ID> pair if Person found live at mapped bucket index
 // i.e. does not return copy if bucket is empty-since-start (nullptr) or empty-since-delete (m_used==false)
 const Person Cache::getPerson(string key, int ID) const{
     int index;
-    // search indices mapped by probing methods for Person with matching key + ID pair
-    //
+    bool found = false;
+    // search indices mapped by probing method for Person with matching key + ID pair
+    // if bucket is occupied by live data, handle the collision and keep searching
+    // if deleted bucket matching data, or empty-since-start bucket is encountered, 
+    // or entire table is searched without finding match, person with parameter <key,ID> pair does not exist
+
+    /*
+    Search current table
+    */
     for (int i = 0; i < m_currentCap; i++) {
-        // determine bucket index
-        index = probingHelper(m_hash(key), i);
+        // determine bucket index using current probing method
+        index = probingHelper(key, i);
+
         // mapped bucket is empty-since-start
-        // Person does not exist in table
-        // returns empty person object
+        // Person does not exist in this table
+        // Look in old table if it exists
         if (m_currentTable[index] == nullptr) {
-            return Person();
+            //return Person();
+            found = false;
+            break;
         }
+
         // mapped bucket is empty-since-delete
         else if (!(m_currentTable[index]->getUsed())) {
             // sought Person is in table but has been deleted
             if ((m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
-                return Person();
+                found = false;
+                break;
             }
         }
+
         // mapped bucket contains live Person matching parameters
         else if ((m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
             // make copy of Person pointed to by table element
@@ -118,26 +265,60 @@ const Person Cache::getPerson(string key, int ID) const{
             return temp;
         }
     }
-    // entire table searched but no matching Person found live
+
+    /*
+    Search old table
+    */
+    for (int i = 0; i < m_oldCap; i++) {
+        // determine bucket index using current probing method
+        index = probingHelper(key, i);
+
+        // mapped bucket is empty-since-start
+        // Person does not exist in table
+        // returns empty person object
+        if (m_oldTable[index] == nullptr) {
+            return Person();
+        }
+
+        // mapped bucket is empty-since-delete
+        else if (!(m_oldTable[index]->getUsed())) {
+            // sought Person is in table but has been deleted
+            if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
+                return Person();
+            }
+        }
+
+        // mapped bucket contains live Person matching parameters
+        else if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
+            // make copy of Person pointed to by table element
+            Person temp = *m_oldTable[index];
+            // return copy of found Person
+            return temp;
+        }
+    }
+
+    // both tables searched but no matching Person found live
     return Person();
 }
-// Looks for person in table; if found, updates its ID and returns true
+// Looks for person in table (current and old); if found, updates its ID and returns true
 // If not found, returns false
 bool Cache::updateID(Person person, int ID){
     // temp holder for result of getPerson()
     // either holds copy of person from table, or holds an empty person object
     Person personTemp = getPerson(person.getKey(), person.getID());
+
     // empty person object; means not found in table
     if ((personTemp.getID() == 0)) {
         return false;
     }
+
     // found as live data in table
     else {
         // Hash person object to find un-updated object's location in table
         int index;
         for (int i=0; i < m_currentCap; i++) {
             // determine bucket index
-            index = probingHelper(m_hash(person.getKey()), i);
+            index = probingHelper(person.getKey(), i);
             // check if matching Person object is found yet
             if ((m_currentTable[index]->getID() == person.getID()) && (m_currentTable[index]->getKey().compare(person.getKey()) == 0)) {
                 // Update ID member of person in table
@@ -207,7 +388,8 @@ int Cache::findNextPrime(int current){
 ******************************************/
 // calls individual probing helper based on current collision-handling policy
 // returns bucket index mapped to for Person with given hashcode and attempt iteration "i"
-int Cache::probingHelper(int hash, int i) const {
+int Cache::probingHelper(string key, int i) const {
+    int hash = m_hash(key);
     switch (m_currProbing) {
         case LINEAR:
             return linearProbe(hash, i);
@@ -225,15 +407,94 @@ int Cache::probingHelper(int hash, int i) const {
 // returns bucket index directly mapped to by hash function
 // if index occupied, will increment by 1 for each iteration
 int Cache::linearProbe(int hash, int i) const {
-    return (hash + i) % m_currentCap;
+    if (i==0) {
+        return hash % m_currentCap;
+    }
+    else {
+        return (hash + i) % m_currentCap;
+    }
 }
 // returns bucket index
 // if index occupied, increments by iteration and square of iteration
 int Cache::quadProbe(int hash, int i) const {
-    return ((hash % m_currentCap) + (i*i)) % m_currentCap;
+    if (i==0) {
+        return hash % m_currentCap;
+    }
+    else {
+        return (hash + i + (i*i)) % m_currentCap;
+    }
 }
 // returns bucket index
 // if index occupied, performs a double-hash to determine index
 int Cache::doubleHashProbe(int hash, int i) const {
-    return ((hash % m_currentCap) + (i * (11 - (hash % 11)))) % m_currentCap;
+    if (i==0) {
+        return hash % m_currentCap;
+    }
+    else {
+        return ((hash % m_currentCap) + (i * (11 - (hash % 11)))) % m_currentCap;
+    }
+}
+// 
+void Cache::rehash() {
+    // Scan 1/4 of old table at a time
+    // When encountering live node (m_used==true), insert to current table
+
+    // Transfer has not started yet
+    if (m_transferIndex==0) {
+        // new table capacity must be smallest prime greater than 4 times current number of data points (number of occupied buckets - number deleted buckets)
+        int newTableCap = findNextPrime(4*(m_currentSize-m_currNumDeleted));
+        // transfer current table to old table
+        m_oldTable = m_currentTable;
+        m_oldCap = m_currentCap;
+        m_oldSize = m_currentSize;
+        m_oldNumDeleted = m_currNumDeleted;
+        m_oldProbing = m_currProbing;
+        // alloc memory for new table using new table capacity
+        m_currentTable = new Person*[newTableCap];
+        m_currentCap = newTableCap;
+        m_currProbing = m_newPolicy;
+
+        // initialize each element of table with nullptr
+        for (int i=0; i < m_currentCap; i++) {
+            m_currentTable[i] = nullptr;
+        }
+    }
+    
+    int quarter = m_oldCap/4;
+
+    for (m_transferIndex; m_transferIndex < (m_transferIndex+quarter); m_transferIndex++) {
+        // check if data is live
+        if ((m_oldTable[m_transferIndex] != nullptr) && (m_oldTable[m_transferIndex]->getUsed())) {
+            // insert live data into current table
+            insert(*(m_oldTable[m_transferIndex]));
+            // delete data from old table
+            remove(*(m_oldTable[m_transferIndex]));
+        }
+    }
+
+    // 25% of data has been transferred, m_transferIndex currently holds value of index to next be transferred
+
+    // after four transfers, whatever is remaining must be transferred to new table
+    if (m_transferIndex > (quarter*3)) {
+        while (m_transferIndex < m_oldCap) {
+            // check if data is live or not
+            if ((m_oldTable[m_transferIndex] != nullptr) && (m_oldTable[m_transferIndex]->getUsed())) {
+                // insert live data into current table
+                insert(*(m_oldTable[m_transferIndex]));
+                // delete data from old table
+                remove(*(m_oldTable[m_transferIndex]));
+            }
+            m_transferIndex++;
+        }
+        // All live data from old table has been transferred:
+        // delete and clear old table
+        delete [] m_oldTable;
+        m_oldCap = 0;
+        m_oldSize = 0;
+        m_oldNumDeleted = 0;
+        m_oldProbing = DEFPOLCY;
+
+        // reset transfer index to indicate rehashing is finished
+        m_transferIndex = 0;
+    }
 }
