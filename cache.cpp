@@ -147,6 +147,7 @@ bool Cache::insert(Person person){
             // insertion successful
             success = true;
             m_currentSize++;
+            m_currNumDeleted--;
             break;
         }
     }

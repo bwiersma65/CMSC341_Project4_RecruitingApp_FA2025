@@ -254,12 +254,15 @@ bool Tester::testInsertWithCollisions() {
 
     // Insert and check that any successfully inserted element is retrievable.
     for (i = 0; i < NUM; i++) {
+        cout << "Inside for loop" << endl;//
         Person p(keys[i], ids[i], true);
         bool ok = c.insert(p);
+        cout << "After insert" << endl;
         inserted[i] = ok;
         if (ok) {
             insertedCount++;
             Person found = c.getPerson(keys[i], ids[i]);
+            cout << "After find" << endl;
             if (!found.getUsed()) {
                 return false;
             }
@@ -267,6 +270,7 @@ bool Tester::testInsertWithCollisions() {
                 return false;
             }
         }
+        cout << "End of for loop" << endl;//
     }
 
     // At least half should have been inserted.
