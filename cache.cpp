@@ -4,16 +4,35 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
     // assign given size into capacity member variable
     m_currentCap = size;
 
-    // if given size is non-prime or less than minimum size
-    if ((!isPrime(m_currentCap)) || (m_currentCap < MINPRIME)) {
-        // finds next prime after given non-prime size
-        // returns value between MINPRIME and MAXPRIME
-        m_currentCap = findNextPrime(m_currentCap);
+    // if given size is non-prime
+    if (!isPrime(m_currentCap)) {
+        // if less than minimum
+        if (m_currentCap < MINPRIME) {
+            // sets capacity to MINPRIME
+            m_currentCap = findNextPrime(m_currentCap);
+        }
+        // else if greater than maximum
+        else if (m_currentCap > MAXPRIME) {
+            m_currentCap = MAXPRIME;
+        }
+        // non-prime but falls within valid range
+        else {
+            // finds next prime after given non-prime size
+            // returns value between MINPRIME and MAXPRIME inclusive
+            m_currentCap = findNextPrime(m_currentCap);
+        }
     }
     // if given size is prime
     else {
-        if (m_currentCap < MINPRIME) m_currentCap = MINPRIME;
-        else if (m_currentCap > MAXPRIME) m_currentCap = MAXPRIME;
+        // if less than minimum
+        if (m_currentCap < MINPRIME) {
+            // sets capacity to MINPRIME
+            m_currentCap = findNextPrime(m_currentCap);
+        }
+        // else if greater than maximum
+        else if (m_currentCap > MAXPRIME) {
+            m_currentCap = MAXPRIME;
+        }
     }
 
     // allocates memory for new hash table with initial size of a prime number
@@ -141,7 +160,7 @@ bool Cache::insert(Person person){
         // load factor is ratio of total number of occupied buckets to table size
         float loadFactor = lambda();
         // If load factor exceeds 50%, initiate rehash
-        if (loadFactor > 0.5) {
+        if (loadFactor >= 0.5) {
             rehash();
         }
     }
@@ -218,7 +237,7 @@ bool Cache::remove(Person person){
         // The deleted ratio is the number of deleted buckets divided by the number of occupied buckets
         float deleteRatio = deletedRatio();
         // If delete ratio exceeds 80%, initiate rehash
-        if (deleteRatio > 0.8) {
+        if (deleteRatio >= 0.8) {
             rehash();
         }
     }
@@ -482,6 +501,7 @@ void Cache::rehash() {
     // When encountering live node (m_used==true), insert to current table
 
     // Transfer has not started yet
+    // Initiate rehash by swapping tables
     if (m_transferIndex==0) {
         // new table capacity must be smallest prime greater than 4 times current number of data points (number of occupied buckets - number deleted buckets)
         int newTableCap = findNextPrime(4*(m_currentSize-m_currNumDeleted));
@@ -494,6 +514,8 @@ void Cache::rehash() {
         // alloc memory for new table using new table capacity
         m_currentTable = new Person*[newTableCap];
         m_currentCap = newTableCap;
+        // change policy if policy change was previously requested
+        // otherwise retains policy
         m_currProbing = m_newPolicy;
 
         // initialize each element of table with nullptr
@@ -504,6 +526,8 @@ void Cache::rehash() {
     
     int quarter = m_oldCap/4;
 
+    // Start this rehash where last rehash left off (index 0 if new rehash)
+    // Transfer buckets contents until a quarter of table has been transferred
     for (m_transferIndex; m_transferIndex < (m_transferIndex+quarter); m_transferIndex++) {
         // check if data is live
         if ((m_oldTable[m_transferIndex] != nullptr) && (m_oldTable[m_transferIndex]->getUsed())) {
