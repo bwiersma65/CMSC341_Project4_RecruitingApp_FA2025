@@ -116,10 +116,10 @@ class Cache{
     * Private function declarations go here! *
     ******************************************/
 
-    int probingHelper(string key, int i) const;
-    int linearProbe(int hash, int i) const;
-    int quadProbe(int hash, int i) const;
-    int doubleHashProbe(int hash,int i) const;
+    int probingHelper(Person** table, string key, int i) const;
+    int linearProbe(int hash, int i, int capacity) const;
+    int quadProbe(int hash, int i, int capacity) const;
+    int doubleHashProbe(int hash,int i, int capacity) const;
 
     void rehash();
 };
