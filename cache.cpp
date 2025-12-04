@@ -309,41 +309,54 @@ const Person Cache::getPerson(string key, int ID) const{
     // return empty Person, to indicate nothing was found
     return Person();
 }
-// Looks for person in table (current and old); if found, updates its ID and returns true
+// Looks for person alive in table (current and old); if found, updates its ID and returns true
 // If not found, returns false
 bool Cache::updateID(Person person, int ID){
     // temp holder for result of getPerson()
-    // either holds copy of person from table, or holds an empty person object
+    // either holds copy of person from table, or holds an empty person object if not found
     Person personTemp = getPerson(person.getKey(), person.getID());
 
-    /*
-    Search current table
-    */
-    // empty person object; means not found in table
+    // empty person object; person not found in table
     if ((personTemp.getID() == 0)) {
         return false;
     }
 
     // found as live data in table
+    /*
+    Search current table
+    */
     else {
-        // Hash person object to find un-updated object's location in table
         int index;
         for (int i=0; i < m_currentCap; i++) {
             // determine bucket index
             index = probingHelper(m_currentTable, person.getKey(), i);
             // check if matching Person object is found yet
-            if ((m_currentTable[index]->getID() == person.getID()) && (m_currentTable[index]->getKey().compare(person.getKey()) == 0)) {
+            if ((m_currentTable[index] != nullptr) && (!(m_currentTable[index]->getUsed())) && (m_currentTable[index]->getID() == person.getID()) 
+                    && (m_currentTable[index]->getKey().compare(person.getKey()) == 0)) {
                 // Update ID member of person in table
                 m_currentTable[index]->setID(ID);
 
                 return true;
             }
         }
+
+        /*
+        Search old table
+        */
+        for (int i=0; i < m_oldCap; i++) {
+            // determine bucket index
+            index = probingHelper(m_oldTable, person.getKey(), i);
+            // check if matching Person object is found yet
+            if ((m_oldTable[index] != nullptr) && (!(m_oldTable[index]->getUsed())) && (m_oldTable[index]->getID() == person.getID()) 
+                    && (m_oldTable[index]->getKey().compare(person.getKey()) == 0)) {
+                // Update ID member of person in table
+                m_oldTable[index]->setID(ID);
+
+                return true;
+            }
+        }
     }
 
-    /*
-    Search old table
-    */
     return false;
 }
 // Returns load factor of current hash table
