@@ -55,7 +55,8 @@ Cache::Cache(int size, hash_fn hash, prob_t probing = DEFPOLCY){
     m_oldCap = 0;
     m_oldSize = 0;
     m_oldNumDeleted = 0;
-    m_oldProbing = DEFPOLCY;
+    //m_oldProbing = DEFPOLCY;
+    m_oldProbing = probing;
 
     m_transferIndex = 0;
 }
@@ -65,20 +66,32 @@ Cache::~Cache(){
     if (m_currentTable != nullptr) {
         // deallocate memory of each table element
         for (int i=0; i < m_currentCap; i++) {
-            delete m_currentTable[i];
+            if (m_currentTable[i] != nullptr) {
+                delete m_currentTable[i];
+                m_currentTable[i] = nullptr;
+            }
         }
         // deallocate memory of table itself
         delete [] m_currentTable;
+        m_currentTable = nullptr;
     }
     // check if old table member is allocated
     if (m_oldTable != nullptr) {
-        // dealloc memory of each element
+        // deallocate memory of each table element
         for (int i=0; i < m_oldCap; i++) {
-            delete m_oldTable[i];
+            if (m_oldTable[i] != nullptr) {
+                delete m_oldTable[i];
+                m_oldTable[i] = nullptr;
+            }
         }
-        // dealloc memory of table itself
+        // deallocate memory of table itself
         delete [] m_oldTable;
+        m_oldTable = nullptr;
     }
+
+    m_currentCap = m_currentSize = m_currNumDeleted = 0;
+    m_oldCap = m_oldSize = m_oldNumDeleted = 0;
+    m_transferIndex = 0;
 }
 // Sets new collision handling policy for table into m_newPolicy member
 // This policy is not implemented until the next rehash/transfer operation commences
@@ -268,19 +281,8 @@ const Person Cache::getPerson(string key, int ID) const{
         // Person does not exist in this table
         // Look next in old table if it exists
         if (m_currentTable[index] == nullptr) {
-            //return Person();
-            //found = false;
             break;
         }
-
-        // // mapped bucket is empty-since-delete
-        // else if (!(m_currentTable[index]->getUsed())) {
-        //     // sought Person is in table but has been deleted
-        //     if ((m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
-        //         //found = false;
-        //         break;
-        //     }
-        // }
 
         // mapped bucket contains live Person matching parameters
         else if ((m_currentTable[index]->getUsed()) && (m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
@@ -304,15 +306,6 @@ const Person Cache::getPerson(string key, int ID) const{
                 //return Person();
                 break;
             }
-
-            // // mapped bucket is empty-since-delete
-            // else if (!(m_oldTable[index]->getUsed())) {
-            //     // sought Person is in table but has been deleted
-            //     if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
-            //         //return Person();
-            //         break;
-            //     }
-            // }
 
             // mapped bucket contains live Person matching parameters
             else if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
