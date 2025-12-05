@@ -285,9 +285,11 @@ const Person Cache::getPerson(string key, int ID) const{
         }
 
         // mapped bucket contains live Person matching parameters
-        else if ((m_currentTable[index]->getUsed()) && (m_currentTable[index]->getID() == ID) && (m_currentTable[index]->getKey().compare(key) == 0)) {
+        else if ((m_currentTable[index]->getUsed()) && 
+                    (m_currentTable[index]->getID() == ID) && 
+                    (m_currentTable[index]->getKey().compare(key) == 0)) {
             // return copy of found Person
-            return *m_currentTable[index];
+            return *(m_currentTable[index]);
         }
     }
     // if old table exists
@@ -303,14 +305,15 @@ const Person Cache::getPerson(string key, int ID) const{
             // Person does not exist in table
             // returns empty person object
             if (m_oldTable[index] == nullptr) {
-                //return Person();
                 break;
             }
 
             // mapped bucket contains live Person matching parameters
-            else if ((m_oldTable[index]->getID() == ID) && (m_oldTable[index]->getKey().compare(key) == 0)) {
+            else if ((m_oldTable[index]->getUsed()) && 
+                        (m_oldTable[index]->getID() == ID) && 
+                        (m_oldTable[index]->getKey().compare(key) == 0)) {
                 // return copy of found Person
-                return *m_oldTable[index];
+                return *(m_oldTable[index]);
             }
         }
     }    
@@ -377,6 +380,11 @@ float Cache::lambda() const {
 }
 // Returns ratio of deleted buckets to occupied (live + deleted) buckets
 float Cache::deletedRatio() const {
+    if (m_currentSize == 0) {
+        float f = 0.0;
+        return f;
+    }
+    
     float dr = (static_cast<float>(m_currNumDeleted))/m_currentSize;
     return dr;
 }
@@ -459,12 +467,7 @@ int Cache::probingHelper(Person** table, string key, int i) const {
 // returns bucket index directly mapped to by hash function
 // if index occupied, will increment by 1 for each iteration
 int Cache::linearProbe(int hash, int i, int capacity) const {
-    if (i==0) {
-        return hash % capacity;
-    }
-    else {
-        return (hash + i) % capacity;
-    }
+    return (hash + i) % capacity;
 }
 // returns bucket index
 // if index occupied, increments by iteration and square of iteration
@@ -473,7 +476,7 @@ int Cache::quadProbe(int hash, int i, int capacity) const {
         return hash % capacity;
     }
     else {
-        return (hash + i + (i*i)) % capacity;
+        return ((hash % capacity) + i + (i*i)) % capacity;
     }
 }
 // returns bucket index
